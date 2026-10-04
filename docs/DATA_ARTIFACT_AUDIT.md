@@ -96,15 +96,20 @@ The README exception does not make downloadable artifacts eligible.
 ## Runtime Distribution Decision
 
 Generated `data/processed/` and `data/feature_store/` artifacts were already
-ignored before this task. Those existing exclusions are retained after auditing
-their actual role and size. No data architecture, Git LFS configuration,
-automatic download, source adapter or runtime path was changed.
+ignored before the original pre-push task. Those existing exclusions remain.
+That task made no data architecture, Git LFS, acquisition or runtime changes;
+the subsequent explicitly authorized deployment preparation is described below.
 
-**Recommendation:** publish the complete immutable active release and root
-manifest as a separate GitHub Release artifact, with a bundle checksum and
-source/attribution notices. Restore it before runtime; do not download or ingest
-during ranking requests. No release bundle or public download URL has been
-created, and this choice is awaiting the user's response before a push.
+The original pre-push recommendation was a separate release artifact. In the
+subsequent Railway preparation, the user authorized the **minimal current JSON
+runtime bundle**, not full aggregate/Parquet/DuckDB exports. It retains both
+manifests, active features and 3,109 evidence partitions: 124,820,413 uncompressed
+bytes in 3,112 files, compressed to 7,997,302 bytes. It is locally generated and
+ignored, not committed, uploaded or published. No download URL exists yet.
+Restoration now runs only at container startup, with pinned content/checksum
+validation and no seeded fallback. See [Railway deployment](RAILWAY_DEPLOYMENT.md)
+for the bundle metadata and operator publication instructions. The pipeline,
+original artifacts and historical exports remain unchanged.
 
 Alternatives explicitly presented:
 
@@ -122,7 +127,7 @@ Alternatives explicitly presented:
 4. Git LFS: possible for large exports, but changes storage/download workflow.
    It was not installed or silently configured.
 
-No real runtime data is included in the pending source-only staging set.
+No real runtime data is included in the source-controlled repository.
 The tiny existing seed fixture remains source-controlled solely as an explicitly
 labeled fallback, not as a substitute for the verified real release.
 

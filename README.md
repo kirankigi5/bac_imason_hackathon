@@ -44,8 +44,9 @@ are copied from the installed package before development and production builds.
 
 Raw downloads, processed caches and runtime releases are not currently included
 in Git. A fresh checkout needs a data build or restoration of a verified release
-before use. The runtime-data distribution decision and exact sizes are documented
-in [the data artifact audit](docs/DATA_ARTIFACT_AUDIT.md); no download URL is invented.
+before use. For Railway, distribute the pinned minimal runtime bundle separately
+from Git; see [Railway deployment](docs/RAILWAY_DEPLOYMENT.md) and
+[the data artifact audit](docs/DATA_ARTIFACT_AUDIT.md). No download URL is invented.
 The current FCC source requires the manual export described below.
 
 ## Environment Variables
@@ -62,7 +63,9 @@ or include `.env.local` in a deployment image. Use server-side hosting secrets.
 | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Matching provider credential |
 | `LLM_API_KEY` | Optional shared server-side credential alias |
 | `DATA_DIR` | Feature-store root; defaults to `../../data/feature_store` from `apps/web` |
-| `PROJECT_DB_PATH` | Private local SQLite database path |
+| `PROJECT_DB_PATH` | Private SQLite database path; persistent volume on Railway |
+| `RUNTIME_ROOT` | Deployment volume root, `/app/runtime` |
+| `RUNTIME_DATA_URL` / `RUNTIME_DATA_SHA256` | Immutable HTTPS bundle and required download checksum |
 | `APP_URL` | Base URL for optional verification scripts |
 | `ALLOW_LLM_VERIFICATION` | `0` by default; active verification is development-only |
 | `CENSUS_API_KEY` | Optional pipeline shell variable; public ACS bulk fallback works without it |
@@ -121,7 +124,7 @@ Aqueduct-derived indicators require WRI attribution under its
 ## Tests And Production Build
 
 ```bash
-make test            # Python pipeline tests and application tests
+make test            # Python, application and deployment-tooling tests
 make lint            # TypeScript checks
 cd apps/web
 npm run build
@@ -133,6 +136,26 @@ processed caches and full published exports, not only a minimal runtime bundle.
 On a fresh checkout, acquire the required FCC export and run `make data` first.
 Verification uses existing local data and mocked/deterministic providers unless
 an explicit live-provider verification command is run.
+
+## Railway Deployment
+
+The root Dockerfile builds the existing Next.js app on Node 22. Runtime startup
+restores the real `ec0ed269269ed0f45e5b` release before serving requests; no
+seeded fallback is allowed. Mount one persistent volume at `/app/runtime` for
+both `feature_store/` and `projects/projects.sqlite`. Set server-side credentials
+in Railway Variables, never in the image.
+
+```bash
+npm ci
+sh scripts/build_runtime_bundle.sh
+docker build --tag bac-imason:railway .
+npm run test:container
+```
+
+The 7.99 MB bundle stays outside Git and must be published separately when
+authorized. Follow [the deployment guide](docs/RAILWAY_DEPLOYMENT.md) for exact
+GitHub Release and Railway steps. Nothing is deployed automatically. **Do not
+expose a public domain before access protection is approved and implemented.**
 
 ## Data And Hosting Caveats
 

@@ -80,3 +80,7 @@ data/feature_store/releases/
 data/feature_store/*.json
 data/feature_store/*.parquet
 data/feature_store/*.duckdb
+
+# Locally generated deployment bundles and container-test volume
+artifacts/runtime/
+.railway-runtime/
