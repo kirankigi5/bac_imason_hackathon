@@ -1,0 +1,82 @@
+# Environment and secrets, including nested application configuration
+.env
+.env.local
+.env.*
+.env.*.local
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node and Next.js generated output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+# Copied from the installed MapLibre package by predev/prebuild
+apps/web/public/maplibre/
+
+# OS and editor-local files
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.part
+
+# SQLite and private local project/audit state
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+data/projects/
+
+# Browser verification artifacts, not application assets
+playwright-report/
+test-results/
+screenshots/
+
+# Original downloads and intermediate county geometry
+data/raw/
+# Acquisition instructions are source documentation required by pipeline tests.
+!data/raw/
+data/raw/**
+!data/raw/**/
+!data/raw/**/README.md
+data/interim/
+
+# Audited generated data: see docs/DATA_ARTIFACT_AUDIT.md.
+# Preserve all local copies. Distribution must be chosen explicitly before push.
+# Processed sources are rebuild inputs, not application runtime inputs.
+data/processed/
+# Current runtime reads manifest + selected release JSON/evidence partitions.
+# Do not accidentally commit old releases or the 100+ MB aggregate JSON exports.
+data/feature_store/releases/
+data/feature_store/*.json
+data/feature_store/*.parquet
+data/feature_store/*.duckdb

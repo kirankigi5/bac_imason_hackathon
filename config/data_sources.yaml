@@ -1,0 +1,115 @@
+sources:
+  counties:
+    name: "U.S. Census 2024 Cartographic County Boundaries"
+    source_page: "https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html"
+    download_url: "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_us_county_500k.zip"
+    raw_dir: "data/raw/counties"
+    filename: "cb_2024_us_county_500k.zip"
+    source_year: 2024
+    max_download_mb: 50
+  egrid:
+    name: "EPA eGRID 2023 revision 2"
+    download_url: "https://www.epa.gov/system/files/documents/2025-06/egrid2023_data_rev2.xlsx"
+    filename: "egrid2023_data_rev2.xlsx"
+    source_year: 2023
+    max_download_mb: 100
+    domain: "epa.gov"
+    category: "energy"
+    required_for_mvp: true
+    acquisition: "manual_or_download"
+    source_page: "https://www.epa.gov/egrid/detailed-data"
+    raw_dir: "data/raw/egrid"
+    refresh: "annual"
+
+  eia:
+    name: "EIA 2024 Electric Sales, Revenue and Average Price"
+    download_url: "https://www.eia.gov/electricity/sales_revenue_price/xls/table_4.xlsx"
+    filename: "table_4_2024.xlsx"
+    source_year: 2024
+    max_download_mb: 20
+    domain: "eia.gov"
+    category: "energy"
+    required_for_mvp: false
+    acquisition: "api_or_manual"
+    source_page: "https://www.eia.gov/electricity/sales_revenue_price/"
+    raw_dir: "data/raw/eia"
+    refresh: "monthly"
+
+  wri_aqueduct:
+    name: "WRI Aqueduct 4.0 baseline water risk"
+    download_url: "https://files.wri.org/aqueduct/aqueduct-4-0-water-risk-data.zip"
+    filename: "aqueduct-4-0-water-risk-data.zip"
+    source_year: 2023
+    baseline_period: "1979-2019"
+    max_download_mb: 750
+    domain: "wri.org"
+    category: "water"
+    required_for_mvp: true
+    acquisition: "manual_or_download"
+    source_page: "https://www.wri.org/data/aqueduct-global-maps-40-data"
+    raw_dir: "data/raw/wri_aqueduct"
+    refresh: "periodic"
+
+  fema:
+    name: "FEMA National Risk Index December 2025 v1.20"
+    api_url: "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Counties/FeatureServer/0/query"
+    source_year: 2025
+    domain: "fema.gov"
+    category: "climate"
+    required_for_mvp: true
+    acquisition: "manual_or_download"
+    source_page: "https://fema.maps.arcgis.com/home/item.html?id=39485e8035d446a5bff03259508ae355"
+    raw_dir: "data/raw/fema"
+    refresh: "periodic"
+
+  noaa:
+    name: "NOAA NCEI nClimDiv county temperature"
+    filename_prefix: "climdiv-norm-tmpccy-v"
+    documentation_url: "https://www.ncei.noaa.gov/pub/data/cirs/climdiv/county-readme.txt"
+    source_year: 2020
+    baseline_period: "1991-2020"
+    domain: "noaa.gov"
+    category: "climate"
+    required_for_mvp: false
+    acquisition: "api_or_manual"
+    source_page: "https://www.ncei.noaa.gov/pub/data/cirs/climdiv/"
+    raw_dir: "data/raw/noaa"
+    refresh: "annual"
+
+  fcc:
+    name: "FCC Broadband Data Collection December 2025"
+    source_year: 2025
+    source_as_of: "2025-12-31"
+    documentation_url: "https://help.bdc.fcc.gov/hc/en-us/articles/10467446103579-How-to-Use-the-FCC-s-National-Broadband-Map"
+    domain: "fcc.gov"
+    category: "infrastructure"
+    required_for_mvp: true
+    acquisition: "manual_or_download"
+    source_page: "https://broadbandmap.fcc.gov/data-download"
+    raw_dir: "data/raw/fcc"
+    refresh: "semiannual"
+
+  usgs:
+    name: "USGS National Land Cover Database"
+    source_year: 2024
+    domain: "usgs.gov"
+    category: "land"
+    required_for_mvp: false
+    acquisition: "manual_or_download"
+    source_page: "https://www.usgs.gov/centers/eros/science/national-land-cover-database"
+    raw_dir: "data/raw/usgs"
+    refresh: "periodic"
+
+  census:
+    name: "U.S. Census ACS 2020-2024 five-year estimates"
+    api_url: "https://api.census.gov/data/2024/acs/acs5"
+    bulk_url: "https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/"
+    tables: ["B01003", "B19013", "B23025"]
+    source_year: 2024
+    domain: "census.gov"
+    category: "community"
+    required_for_mvp: true
+    acquisition: "api_or_manual"
+    source_page: "https://www.census.gov/programs-surveys/acs/data/summary-file.2024.html"
+    raw_dir: "data/raw/census"
+    refresh: "annual"

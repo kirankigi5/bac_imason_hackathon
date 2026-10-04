@@ -1,0 +1,107 @@
+# All scores are deterministic planning proxies, not learned predictions.
+metrics:
+  grid_carbon_intensity_kgco2e_mwh:
+    category: energy
+    weight: 0.7
+    direction: lower
+    min: 0
+    max: 1000
+    source: egrid
+    unit: kg CO2e/MWh
+  noncombustion_generation_pct:
+    category: energy
+    weight: 0.2
+    direction: higher
+    min: 0
+    max: 100
+    source: egrid
+    unit: "%"
+  annual_mean_temperature_c:
+    category: energy
+    weight: 0.1
+    direction: lower
+    min: -5
+    max: 30
+    source: noaa
+    unit: degrees C
+  water_stress_current:
+    category: water
+    weight: 1
+    direction: lower
+    min: 0
+    max: 5
+    source: wri_aqueduct
+    unit: Aqueduct baseline stress score (0-5)
+  wildfire_risk_index:
+    category: climate
+    weight: 0.2
+    direction: lower
+    min: 0
+    max: 100
+    source: fema
+    unit: national risk percentile (0-100)
+  drought_risk_index:
+    category: climate
+    weight: 0.2
+    direction: lower
+    min: 0
+    max: 100
+    source: fema
+    unit: national risk percentile (0-100)
+  flood_risk_index:
+    category: climate
+    weight: 0.2
+    direction: lower
+    min: 0
+    max: 100
+    source: fema
+    unit: national risk percentile (0-100)
+  hurricane_risk_index:
+    category: climate
+    weight: 0.2
+    direction: lower
+    min: 0
+    max: 100
+    source: fema
+    unit: national risk percentile (0-100)
+  extreme_heat_risk_index:
+    category: climate
+    weight: 0.2
+    direction: lower
+    min: 0
+    max: 100
+    source: fema
+    unit: national risk percentile (0-100)
+  fiber_coverage_pct:
+    category: infrastructure
+    weight: 1
+    direction: higher
+    min: 0
+    max: 100
+    source: fcc
+    unit: "% FCC county units"
+  industrial_electricity_price_cents_kwh:
+    category: economics
+    weight: 1
+    direction: lower
+    min: 0
+    max: 30
+    source: eia
+    unit: cents/kWh
+  civilian_labor_force:
+    category: community
+    weight: 1
+    direction: higher
+    method: log_percentile
+    lower_percentile: 0.05
+    upper_percentile: 0.95
+    source: census
+    unit: persons
+  approval_readiness:
+    category: approval
+    weight: 1
+    direction: higher
+    min: 0
+    max: 100
+    source: local_approval
+    unit: documented approval readiness
