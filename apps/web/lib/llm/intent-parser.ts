@@ -27,19 +27,25 @@ export function extractIntentUpdate(message: string, currentProject: ProjectStat
 
 const capacityAnswer = /^(?:(?:around|roughly|about|approximately)\s+)?(\d+(?:\.\d+)?)\s*(?:mw|megawatts?|gw|gigawatts?)?[.!]?$/i;
 const nationwideAnswer = /^(?:all|all (?:supported )?(?:u\.?s\.? )?(?:states|counties)|nationwide|anywhere(?: in (?:the )?(?:us|u\.s\.|united states))?)[.!]?$/i;
+export const isAcknowledgement = (message: string) => /^(?:thanks?|thank you|ok(?:ay)?|sounds good|looks good|good)[.!]?$/i.test(message.trim());
+export const isGreeting = (message: string) => /^(?:hello|hi|hey)[.!]?$/i.test(message.trim());
 
 export function parseContextualIntent(message: string, currentProject: ProjectState): ParsedIntent | null {
   const text = message.trim();
   const activeField = getMissingRequiredFields(currentProject)[0];
   const contextual = activeField === "capacity" && capacityAnswer.test(text)
     || activeField === "workload_type" && /^(?:(?:ai|mostly|primarily)\s+)?(?:training|inference|mixed|mix|both|(?:general )?cloud)[.!]?$/i.test(text)
+    || activeField === "workload_type" && nationwideAnswer.test(text)
     || activeField === "target_go_live_year" && /^(?:(?:by|in|around|roughly|about)\s+)?(?:20\d{2}|2100)[.!]?$/i.test(text)
-    || nationwideAnswer.test(text) || /^(?:hello|hi|hey)[.!]?$/i.test(text);
+    || nationwideAnswer.test(text)
+    || isAcknowledgement(text)
+    || isGreeting(text);
   return contextual ? parseLocalIntent(message, currentProject) : null;
 }
 
 export function parseLocalIntent(message: string, currentProject: ProjectState): ParsedIntent {
   const text = message.toLowerCase();
+  const activeField = getMissingRequiredFields(currentProject)[0];
   const value: z.infer<typeof intentSchema> = {
     capacity_mw: null, workload_type: null, geography: null, target_go_live_year: null,
     planning_horizon_year: null, priority_changes: [], constraints_to_add: [], constraints_to_remove: [],
@@ -66,7 +72,7 @@ export function parseLocalIntent(message: string, currentProject: ProjectState):
   if (contextualCapacity) value.capacity_mw = Number(contextualCapacity[1]);
 
   const training = /training/.test(text), inference = /inference/.test(text);
-  value.workload_type = /mixed|\bmix\b|both/.test(text) ? "MIXED"
+  value.workload_type = activeField === "workload_type" && nationwideAnswer.test(text.trim()) || /mixed|\bmix\b|both/.test(text) ? "MIXED"
     : training && inference ? null : training ? "AI_TRAINING" : inference ? "AI_INFERENCE" : /cloud/.test(text) ? "CLOUD" : null;
   if (training && inference && !/mixed|\bmix\b|both/.test(text)) value.clarification = "workload";
 
@@ -94,20 +100,21 @@ export function parseLocalIntent(message: string, currentProject: ProjectState):
   if (regions.length || selectedStates.length || /united states|usa|u\.s\.|\bus\b/.test(text)) {
     value.geography = { country: "US", states: [...new Set(selectedStates)], regions };
   }
-  if (nationwideAnswer.test(text.trim())) value.geography = { country: "US", states: [], regions: [] };
+  if (nationwideAnswer.test(text.trim()) && activeField !== "workload_type") value.geography = { country: "US", states: [], regions: [] };
   if (/canada|europe|india|outside the us/.test(text)) value.clarification = "geography";
 
   const priorities: Array<[CategoryKey, RegExp]> = [
     ["energy", /clean energy|renewable|low.carbon|clean.*power|clean.*grid|energy.*priority/],
     ["water", /water.*(?:matter|more|important|priority|resilien|risk|stress)|low water/],
     ["climate", /climate|wildfire|drought|flood|heat risk/],
-    ["infrastructure", /fiber|infrastructure|transmission|land availability/],
+    ["infrastructure", /fiber|infrastructure|transmission|land availability|\bgrid\b/],
     ["economics", /cost|cheap|economic|tax/],
     ["approval", /approval|permit|zoning/],
     ["community", /community|social license|public concern/]
   ];
   for (const [factor, pattern] of priorities) {
     if (!pattern.test(text)) continue;
+    if (factor === "infrastructure" && /clean\s+(?:energy|grid|power)/.test(text)) continue;
     if (factor === "climate" && /avoid|exclude|remove|drop|max|below|under/.test(text) && !/climate|prioriti[sz]e|matter|important/.test(text)) continue;
     const subject = factor === "economics" ? "cost|economics" : factor;
     const more = new RegExp("(?:" + subject + ").*(?:even more|much more|increase|higher priority)").test(text)

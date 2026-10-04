@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { converse } from "./conversation";
+import { parseContextualIntent, parseLocalIntent } from "@/lib/llm/intent-parser";
 import { LocalDeterministicProvider, StructuredLLMProvider } from "@/lib/llm/provider";
 import { cloneProject } from "./defaults";
 import { getLocationFeatures } from "@/lib/data/store";
 import { rankLocations } from "@/lib/decision-engine/scoring";
 import { categoryKeys } from "@/lib/types/domain";
+import * as decisions from "@/lib/backend/decisions";
+import { explanationFacts } from "@/lib/decision-engine/explanation-facts";
 import { POST as search } from "@/app/api/locations/search/route";
 import { POST as parse } from "@/app/api/project/parse-intent/route";
 import type { intentSchema } from "@/lib/llm/schemas";
@@ -60,6 +63,78 @@ describe("canonical conversation and deterministic deltas", () => {
     expect(first.search?.results).toEqual(expected.results.slice(0, 20));
     expect(first.search?.feasibleCount).toBe(expected.results.length);
     expect(first.provider?.mode).toBe("fallback");
+  });
+  it("follows the exact conversational regression without geography drift, verbose details, or ranking on thanks", async () => {
+    let project = cloneProject();
+    const send = async (message: string) => {
+      const result = await converse({ message, currentProject: project }, provider);
+      project = result.project;
+      return result;
+    };
+    expect((await send("build the next datacenter")).followupQuestion).toMatch(/capacity/i);
+    const capacity = await send("800");
+    expect(capacity.project.capacityMw).toBe(800);
+    expect(capacity.followupQuestion).toMatch(/training, inference/i);
+    const beforeAllGeography = structuredClone(project.geography);
+    const workload = await send("all");
+    expect(workload.project.workloadType).toBe("MIXED");
+    expect(workload.project.geography).toEqual(beforeAllGeography);
+    expect(workload.followupQuestion).toMatch(/go-live year/i);
+    expect((await send("2045")).followupQuestion).toMatch(/priority/i);
+    const updated = await send("grid");
+    expect(updated.project.activePrioritySignals).toContain("infrastructure");
+    expect(updated.search).toBeDefined();
+    expect(updated.assistantMessage).toBe("Ranking refreshed.");
+
+    const explanation = await send("explain this");
+    const text = explanation.assistantMessage;
+    const wordCount = text.trim().split(/\s+/).length;
+    expect(wordCount).toBeGreaterThanOrEqual(50);
+    expect(wordCount).toBeLessThanOrEqual(90);
+    expect(text).not.toMatch(/scoring version|normalization version|data release|release ID|EPSG|grid_carbon_intensity|fiber_coverage_pct|water_stress_current|\d+\.\d+ points|eGRID|Census ACS|FCC/);
+    expect(text).not.toContain("Infrastructure & Land");
+    expect(text).not.toContain("Community Readiness");
+    expect(text).not.toContain("selected county's score minus its score");
+    expect(explanationFacts(explanation.explanationPayload!).find((fact) => fact.id === "factor:infrastructure")?.text).toContain("Infrastructure & Connectivity");
+    expect(explanationFacts(explanation.explanationPayload!).find((fact) => fact.id === "factor:community")?.text).toContain("Workforce & Community Context");
+
+    const ranking = vi.spyOn(decisions, "getRanking");
+    const parse = vi.fn();
+    const thankYou = await converse({ message: "thanks", currentProject: project }, {
+      parseProjectIntent: parse,
+      generateExplanation: vi.fn()
+    });
+    expect(thankYou.assistantMessage).toBe("You're welcome.");
+    expect(thankYou.project).toEqual(project);
+    expect(thankYou.changes).toEqual([]);
+    expect(thankYou.search).toBeUndefined();
+    expect(thankYou.project_record).toBeUndefined();
+    expect(ranking).not.toHaveBeenCalled();
+    expect(parse).not.toHaveBeenCalled();
+    ranking.mockRestore();
+  });
+  it("maps grid readiness to infrastructure and clean energy to energy", async () => {
+    const baseline = () => cloneProject({ capacityMw: 800, workloadType: "MIXED", targetGoLiveYear: 2045 });
+    const gridPriority = await converse({ message: "grid", currentProject: baseline() }, provider);
+    expect(gridPriority.project.activePrioritySignals).toContain("infrastructure");
+    expect(gridPriority.project.activePrioritySignals).not.toContain("energy");
+
+    const cleanPriority = await converse({ message: "clean energy", currentProject: baseline() }, provider);
+    expect(cleanPriority.project.activePrioritySignals).toContain("energy");
+    expect(cleanPriority.project.activePrioritySignals).not.toContain("infrastructure");
+  });
+  it("clarifies unrelated input without ranking, persistence, or project changes", async () => {
+    const first = await start();
+    const ranking = vi.spyOn(decisions, "getRanking");
+    const response = await converse({ message: "jan 26 is", currentProject: first.project }, provider);
+    expect(response.assistantMessage).toContain("Could you clarify?");
+    expect(response.assistantMessage).not.toContain("conflicting instructions");
+    expect(response.project).toEqual(first.project);
+    expect(response.changes).toEqual([]);
+    expect(response.search).toBeUndefined();
+    expect(response.project_record).toBeUndefined();
+    expect(ranking).not.toHaveBeenCalled();
+    ranking.mockRestore();
   });
   it("computes actual old/new ranks, scores and contributions across the full store", async () => {
     const first = await start();
@@ -141,7 +216,8 @@ describe("canonical conversation and deterministic deltas", () => {
     const explained = await converse({ message, currentProject: first.project }, provider);
     expect(explained.explanationPayload).toBeDefined();
     expect(explained.project).toEqual(first.project);
-    expect(explained.assistantMessage).toContain("backbone");
+    if (message === "Why here?") expect(explained.assistantMessage).not.toContain("backbone");
+    else expect(explained.assistantMessage).toContain("backbone");
     expect(explained.assistantMessage).not.toContain("residents approve");
   });
   it("uses the same evidence and scores for all three audience modes", async () => {
@@ -150,8 +226,8 @@ describe("canonical conversation and deterministic deltas", () => {
       converse({ message: "Why here?", currentProject: first.project, audience }, provider)));
     expect(outputs[0].explanationPayload!.evidence).toEqual(outputs[2].explanationPayload!.evidence);
     expect(outputs[0].explanationPayload!.location.category_scores).toEqual(outputs[1].explanationPayload!.location.category_scores);
-    expect(outputs[2].assistantMessage).toContain("Community review");
-    expect(outputs[2].assistantMessage).toContain("not a jobs forecast or resident support");
+    expect(outputs[2].assistantMessage).toContain("Workforce & Community Context");
+    expect(outputs[2].assistantMessage).toContain("not jobs forecasts or resident support");
   });
   it("shows all actual changes when filters supply a new canonical project", async () => {
     const first = await start();

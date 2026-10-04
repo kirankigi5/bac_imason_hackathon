@@ -82,7 +82,8 @@ describe("chat/filter state synchronization", () => {
     expect(screen.getByText(/same feature release was evaluated/)).toBeTruthy();
     expect(calls.at(-1)).toHaveProperty("previousProject");
     await send("Explain this recommendation to the local community");
-    expect(screen.getByText(/Community review: water/)).toBeTruthy();
+    expect(screen.getByText(/Workforce & Community Context reflects labor-pool data/)).toBeTruthy();
+    expect(screen.getByText(/not jobs forecasts or resident support/)).toBeTruthy();
     expect(calls.at(-1)).toMatchObject({ responseQuestion: "why_here", hasExplanation: true });
     await screen.findByRole("dialog", { name: "Why this location?" });
     expect((await within(screen.getByRole("dialog")).findByRole("button", { name: "community" })).className).toContain("bg-aqua");

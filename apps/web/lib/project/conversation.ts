@@ -3,9 +3,9 @@ import { DecisionError, getRanking, versionsFor } from "@/lib/backend/decisions"
 import { getProjectRepository } from "./repository";
 import { updateProject } from "./persistence";
 import { computeRankingChanges } from "@/lib/decision-engine/ranking-changes";
-import { buildExplanationPayload } from "@/lib/decision-engine/explanations";
+import { buildExplanationPayload, explainConciseFromPayload } from "@/lib/decision-engine/explanations";
 import { getLLMProvider, type LLMProvider } from "@/lib/llm/provider";
-import { finalizeIntent } from "@/lib/llm/intent-parser";
+import { finalizeIntent, isAcknowledgement, isGreeting, parseLocalIntent } from "@/lib/llm/intent-parser";
 import { conversationSchema } from "@/lib/llm/schemas";
 import type { ConversationResponse } from "@/lib/types/domain";
 import { cloneProject } from "./defaults";
@@ -17,6 +17,23 @@ export async function converse(body: unknown, provider: LLMProvider = getLLMProv
   const saved = input.projectId ? getProjectRepository().get(input.projectId) : undefined;
   if (saved && input.expectedRevision !== saved.revision) throw new DecisionError(409, "Project revision changed; reload before updating");
   const current = cloneProject(saved && input.source !== "filters" ? saved.project : input.currentProject ?? saved?.project);
+  if (input.source !== "filters" && getMissingRequiredFields(current).length === 0 && isAcknowledgement(input.message)) {
+    const acknowledgement = finalizeIntent(parseLocalIntent(input.message, current), current);
+    return { ...acknowledgement, assistantMessage: "You're welcome.", followupQuestion: null, readyToSearch: true,
+      audience: input.audience ?? "developer", question: "why_here",
+      provider: { provider: "engine", mode: "fallback", reason: "Acknowledgement; project left unchanged" } };
+  }
+  const localIntent = input.source === "filters" ? undefined : parseLocalIntent(input.message, current);
+  if (localIntent && getMissingRequiredFields(current).length === 0 && localIntent.action !== "explain"
+    && !localIntent.clarification && !hasProjectUpdate(localIntent.update)
+    && !/^\s*(?:please\s+)?evaluate\s+(?:the\s+)?current\s+project[.!]?\s*$/i.test(input.message)) {
+    const assistantMessage = isGreeting(input.message) ? "Hello! What would you like to change or ask about?"
+      : `I'm not sure what you mean by "${input.message.trim()}". Could you clarify?`;
+    return { ...finalizeIntent(localIntent, current), project: current, projectUpdate: {}, changes: [],
+      assistantMessage, followupQuestion: null, clarification: assistantMessage, readyToSearch: false,
+      audience: input.audience ?? "developer", question: "why_here",
+      provider: { provider: "engine", mode: "fallback", reason: "No recognized project intent; project left unchanged" } };
+  }
   const parsed = input.source === "filters"
     ? { value: { update: {}, action: "update_project" as const, question: "why_here" as const, clarification: null },
       status: { provider: "engine", mode: "fallback" as const, reason: "Filter values validated directly without LLM interpretation" } }
@@ -49,7 +66,7 @@ export async function converse(body: unknown, provider: LLMProvider = getLLMProv
       input.selectedLocationId);
   }
   if (intent.action !== "explain") {
-    response.assistantMessage = response.changes.length ? "Updated the visible project profile and reran feasibility, then ranking."
+    response.assistantMessage = response.changes.length ? "Ranking refreshed."
       : "Evaluated the current project with the deterministic engine.";
     if (/fiber/i.test(input.message)) {
       const scoped = features.filter((row) => !response.project.geography?.states?.length
@@ -76,8 +93,14 @@ export async function converse(body: unknown, provider: LLMProvider = getLLMProv
   if (intent.question === "outrank") payload.comparison = [...ranking.results, ...ranking.excluded].find((row) =>
     response.project.compareLocationIds.includes(row.location_id) && row.location_id !== selected.location_id) ?? payload.nearestAlternatives[0];
   const explanation = await provider.generateExplanation(payload, response.audience);
-  response.assistantMessage = explanation.value;
+  response.assistantMessage = intent.question === "why_here" ? explainConciseFromPayload(payload, response.audience) : explanation.value;
   response.provider = explanation.status;
   response.explanationPayload = payload;
   return finish();
+}
+
+function hasProjectUpdate(update: ReturnType<typeof parseLocalIntent>["update"]): boolean {
+  return update.capacityMw !== undefined || update.workloadType !== undefined || update.geography !== undefined
+    || update.targetGoLiveYear !== undefined || update.planningHorizonYear !== undefined
+    || !!update.priorityChanges?.length || !!update.constraintsToAdd?.length || !!update.constraintsToRemove?.length;
 }

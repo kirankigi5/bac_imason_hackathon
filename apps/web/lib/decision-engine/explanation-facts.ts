@@ -1,4 +1,4 @@
-import { categoryLabels } from "@/lib/project/defaults";
+import { factorLabels } from "@/lib/frontend/factor-metadata";
 import { categoryKeys, type Audience, type ExplanationPayload } from "@/lib/types/domain";
 import { contributionMetricNames } from "./explanations";
 
@@ -19,8 +19,8 @@ export function explanationFacts(payload: ExplanationPayload): ExplanationFact[]
   for (const factor of categoryKeys) {
     const score = location.category_scores[factor];
     facts.push({ id: "factor:" + factor, kind: score === null ? "uncertainty" : "trade_off",
-      text: score === null ? `${categoryLabels[factor]} is unavailable and excluded from scoring.`
-        : `${categoryLabels[factor]} scores ${score}/100, contributes ${location.weighted_contributions[factor]} points, and receives ${(location.normalized_weights[factor] * 100).toFixed(1)}% of the available-metric weight.` });
+      text: score === null ? `${factorLabels[factor]} is unavailable and excluded from scoring.`
+        : `${factorLabels[factor]} scores ${score}/100, contributes ${location.weighted_contributions[factor]} points, and receives ${(location.normalized_weights[factor] * 100).toFixed(1)}% of the available-metric weight.` });
   }
   for (const [index, record] of payload.evidence.entries()) {
     if (record.raw_value === null) continue;
@@ -52,12 +52,12 @@ export function explanationFacts(payload: ExplanationPayload): ExplanationFact[]
   if (alternative) {
     const gap = Number((location.overall_score - alternative.overall_score).toFixed(1));
     facts.push({ id: "comparison", kind: "trade_off",
-      text: `${alternative.county_name}, ${alternative.state_code} ranks ${alternative.rank ? "#" + alternative.rank : "as excluded"} with ${alternative.overall_score}/100. The selected county's score minus its score is ${gap} points.` });
+      text: `${alternative.county_name}, ${alternative.state_code} ranks ${alternative.rank ? "#" + alternative.rank : "as excluded"} with ${alternative.overall_score}/100. ${location.county_name} ${gap >= 0 ? "leads" : "trails"} by ${Math.abs(gap).toFixed(1)} points under the current weights.` });
     for (const factor of categoryKeys) {
       if (location.category_scores[factor] === null || alternative.category_scores[factor] === null) continue;
       const difference = Number((alternative.weighted_contributions[factor] - location.weighted_contributions[factor]).toFixed(2));
       facts.push({ id: "comparison:" + factor, kind: "trade_off",
-        text: `${categoryLabels[factor]} contributes ${alternative.weighted_contributions[factor]} points to ${alternative.county_name} versus ${location.weighted_contributions[factor]} to ${location.county_name}; the alternative's contribution difference is ${difference} points.` });
+        text: `${factorLabels[factor]} contributes ${alternative.weighted_contributions[factor]} points to ${alternative.county_name} versus ${location.weighted_contributions[factor]} to ${location.county_name}; the alternative's contribution difference is ${difference} points.` });
     }
     if (payload.question === "outrank") facts.push({ id: "outrank", kind: "trade_off", required: true,
       text: `${alternative.county_name} would outrank ${location.county_name} only if it passes the constraints and its recomputed total weighted score becomes higher. Its current score gap is ${Number((alternative.overall_score - location.overall_score).toFixed(1))} points. A weight change requires deterministic reranking; this is not a prediction of approval or site capacity.` });
@@ -75,7 +75,7 @@ export function explanationFacts(payload: ExplanationPayload): ExplanationFact[]
         text: `${row.countyName}: rank ${row.oldRank ?? "excluded"} to ${row.newRank ?? "excluded"}; score ${row.oldScore} to ${row.newScore}.` });
       for (const factor of row.factors.filter((item) => item.difference !== 0 || item.oldWeight !== item.newWeight)) {
         facts.push({ id: "change:factor:" + row.locationId + ":" + factor.factor, kind: "change",
-          text: `${row.countyName}, ${categoryLabels[factor.factor]}: effective weight ${(100 * factor.oldWeight).toFixed(1)}% to ${(100 * factor.newWeight).toFixed(1)}%; contribution ${factor.oldContribution} to ${factor.newContribution} points (${factor.difference >= 0 ? "+" : ""}${factor.difference}).` });
+          text: `${row.countyName}, ${factorLabels[factor.factor]}: effective weight ${(100 * factor.oldWeight).toFixed(1)}% to ${(100 * factor.newWeight).toFixed(1)}%; contribution ${factor.oldContribution} to ${factor.newContribution} points (${factor.difference >= 0 ? "+" : ""}${factor.difference}).` });
       }
       if (row.newlyFailedConstraints.length) facts.push({ id: "change:failed:" + row.locationId, kind: "change",
         text: `${row.countyName} newly fails: ${row.newlyFailedConstraints.join("; ")}.` });

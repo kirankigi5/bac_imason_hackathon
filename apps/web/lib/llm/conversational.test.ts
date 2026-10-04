@@ -137,6 +137,30 @@ describe("provider and evidence safeguards", () => {
     expect(result.value.update.capacityMw).toBe(700);
     expect(transport.complete.mock.calls[0][2].additionalProperties).toBe(false);
   });
+  it("routes explanation questions deterministically instead of letting the model reclassify them", async () => {
+    const transport = { complete: vi.fn() };
+    const result = await new StructuredLLMProvider(transport).parseProjectIntent("explain this", complete());
+    expect(result.value.action).toBe("explain");
+    expect(result.value.question).toBe("why_here");
+    expect(transport.complete).not.toHaveBeenCalled();
+  });
+  it("preserves explicit grid versus clean-energy priority factors over model extraction", async () => {
+    const transport = { complete: vi.fn(async (_prompt: string, input: unknown) => {
+      const message = (input as { message: string }).message;
+      return { ...blank(), priority_changes: [{ factor: message === "grid" ? "energy" : "infrastructure",
+        importance: "HIGH", direction: null }] };
+    }) };
+    const provider = new StructuredLLMProvider(transport, "test-provider");
+    const grid = await provider.parseProjectIntent("grid", complete());
+    expect(grid.value.update.priorityChanges).toContainEqual(expect.objectContaining({ factor: "infrastructure" }));
+    expect(grid.value.update.priorityChanges).not.toContainEqual(expect.objectContaining({ factor: "energy" }));
+    expect(grid.status.mode).toBe("fallback");
+
+    const cleanEnergy = await provider.parseProjectIntent("clean energy", complete());
+    expect(cleanEnergy.value.update.priorityChanges).toContainEqual(expect.objectContaining({ factor: "energy" }));
+    expect(cleanEnergy.value.update.priorityChanges).not.toContainEqual(expect.objectContaining({ factor: "infrastructure" }));
+    expect(cleanEnergy.status.mode).toBe("fallback");
+  });
   it("falls back after malformed output, refusal or transport failure", async () => {
     for (const transport of [{ complete: vi.fn().mockResolvedValue({ injected: true }) }, { complete: vi.fn().mockRejectedValue(new Error("401")) }]) {
       const result = await new StructuredLLMProvider(transport).parseProjectIntent("700 MW instead", complete());

@@ -86,7 +86,7 @@ export function useWorkspace() {
       selectedLocationId: current.selectedLocationId ?? search?.results[0]?.location_id,
       previousProject: source === "filters" ? prior : /why|explain|trade.off|risks|outrank|what changed/i.test(message) ? beforeRef.current : undefined,
       ...(record ? { projectId: record.id, expectedRevision: record.revision } : {}) });
-    acceptProject(response.project); setSearch(response.search); setAudience(response.audience);
+    acceptProject(response.project); setSearch(response.search ?? search); setAudience(response.audience);
     if (response.provider?.provider !== "engine") setProvider(response.provider);
     setMessages((list) => [...list, { id: crypto.randomUUID(), role: "assistant", changes: response.changes,
       content: response.assistantMessage + (response.followupQuestion ? "\n\n" + response.followupQuestion : "") }]);

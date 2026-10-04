@@ -46,6 +46,8 @@ export class StructuredLLMProvider implements LLMProvider {
     if (contextual) return { value: contextual, status: { provider: "engine", mode: "fallback", reason: "Contextual intake answer parsed deterministically" } };
     // Resolve explicit contradictions even if a remote model overlooked them.
     const local = parseLocalIntent(message, currentProject);
+    if (local.action === "explain") return { value: local,
+      status: { provider: "engine", mode: "fallback", reason: "Explanation question routed deterministically" } };
     if (local.clarification) return this.fallback.parseProjectIntent(message, currentProject);
     try {
       const raw = intentSchema.parse(await this.transport.complete(intentPrompt, { message, currentProject,
@@ -61,6 +63,15 @@ export class StructuredLLMProvider implements LLMProvider {
           && JSON.stringify(value.update[field]) !== JSON.stringify(currentProject[field])) {
           throw new Error("Extraction changed an accepted intake field without an explicit update");
         }
+      }
+      const explicitPriorities = (local.update.priorityChanges ?? []).map((item) => item.factor).sort();
+      const extractedPriorities = (value.update.priorityChanges ?? []).map((item) => item.factor).sort();
+      const gridMisclassifiedAsEnergy = explicitPriorities.includes("infrastructure") && !explicitPriorities.includes("energy")
+        && extractedPriorities.includes("energy");
+      const cleanEnergyMisclassifiedAsInfrastructure = explicitPriorities.includes("energy") && !explicitPriorities.includes("infrastructure")
+        && extractedPriorities.includes("infrastructure");
+      if (gridMisclassifiedAsEnergy || cleanEnergyMisclassifiedAsInfrastructure) {
+        throw new Error("Extraction changed an explicit priority factor");
       }
       const completedClarification = raw.clarification === "capacity" && !!currentProject.capacityMw
         || raw.clarification === "workload" && !!currentProject.workloadType

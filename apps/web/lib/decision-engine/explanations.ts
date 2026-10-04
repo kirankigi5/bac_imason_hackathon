@@ -1,4 +1,4 @@
-import { categoryLabels } from "@/lib/project/defaults";
+import { factorLabels } from "@/lib/frontend/factor-metadata";
 import type { Audience, CompareResult, EvidenceItem, ExplanationPayload, ProjectState, RankedLocation } from "@/lib/types/domain";
 import { categoryKeys } from "@/lib/types/domain";
 import { getContributionLeaders } from "./scoring";
@@ -40,10 +40,25 @@ export function buildExplanationPayload(
   };
 }
 
+export function explainConciseFromPayload(payload: ExplanationPayload, audience: Audience): string {
+  const { location, project } = payload;
+  const strengths = payload.topPositiveContributions.slice(0, 3).map((item) => factorLabels[item.factor]);
+  const risk = [...location.risks, ...location.feasibility.warnings][0]
+    ?.replace(/\s*\([^)]*\)/g, "")
+    .replace(/\b\d+(?:\.\d+)?\s*\/\s*100\b/g, "")
+    .replaceAll("Infrastructure & Land", factorLabels.infrastructure)
+    .replaceAll("Community Readiness", factorLabels.community)
+    .replace(/\s+/g, " ")
+    .trim();
+  const riskText = risk ? risk.split(" ").slice(0, 14).join(" ") : "No risk threshold is currently flagged";
+  const communityCaveat = audience === "community" ? " Workforce & Community Context reflects labor-pool data, not jobs forecasts or resident support." : "";
+  return `The strongest screened option is ${location.county_name}, ${location.state_code}, ranked #${location.rank} with a score of ${location.overall_score}/100. Its leading strengths are ${strengths.join(", ")}. Key risk: ${riskText}. The requested ${project.capacityMw ?? "unspecified"} MW is a screening input, not confirmed supply. Utility capacity and interconnection need direct validation; county-level screening does not establish parcel suitability or local approval.${communityCaveat}`;
+}
+
 export function explainFromPayload(payload: ExplanationPayload, audience: Audience): string {
   const { location, project } = payload;
   const positives = payload.topPositiveContributions
-    .map((item) => `${categoryLabels[item.factor]} contributes ${item.contribution.toFixed(1)} points from a ${item.score}/100 score at ${Math.round(item.weight * 100)}% weight`)
+    .map((item) => `${factorLabels[item.factor]} contributes ${item.contribution.toFixed(1)} points from a ${item.score}/100 score at ${Math.round(item.weight * 100)}% weight`)
     .join("; ");
   const risks = [...location.risks, ...location.feasibility.warnings].join("; ") || "No observed indicators cross the current risk thresholds.";
   const context = location.data_status === "estimated"
@@ -82,7 +97,7 @@ export function compareLocations(locations: RankedLocation[]): CompareResult {
   const leader = sorted[0];
   const factorDeltas = categoryKeys.map((factor) => ({
     factor,
-    label: categoryLabels[factor],
+    label: factorLabels[factor],
     values: Object.fromEntries(sorted.map((location) => [location.location_id, location.category_scores[factor]]))
   }));
 

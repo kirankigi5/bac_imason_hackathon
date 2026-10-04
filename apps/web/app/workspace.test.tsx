@@ -305,6 +305,67 @@ describe("chat-first desktop UX", () => {
     }
     expect(screen.getByText("I want to build an AI data center.")).toBeTruthy();
   });
+  it("renders the exact all-workloads transcript once and keeps thanks from reranking", async () => {
+    render(<Home />);
+    await send("build the next datacenter");
+    expect(latest("/api/project/converse").output.followupQuestion).toMatch(/capacity/i);
+    await send("800");
+    expect(latest("/api/project/converse").output.project.capacityMw).toBe(800);
+    expect(latest("/api/project/converse").output.followupQuestion).toMatch(/training, inference/i);
+    const originalGeography = structuredClone(latest("/api/project/converse").output.project.geography);
+    await send("all");
+    expect(latest("/api/project/converse").output.project.workloadType).toBe("MIXED");
+    expect(latest("/api/project/converse").output.project.geography).toEqual(originalGeography);
+    expect(latest("/api/project/converse").output.followupQuestion).toMatch(/go-live year/i);
+    await send("2045");
+    expect(latest("/api/project/converse").output.project.targetGoLiveYear).toBe(2045);
+    expect(latest("/api/project/converse").output.followupQuestion).toMatch(/priority/i);
+    await send("grid");
+    const update = latest("/api/project/converse").output;
+    expect(update.project.activePrioritySignals).toContain("infrastructure");
+    expect(update.search).toBeDefined();
+    expect(update.assistantMessage).toBe("Ranking refreshed.");
+    const updateMessages = [...document.querySelectorAll(".message-assistant p")]
+      .filter((node) => node.textContent?.includes("Ranking refreshed."));
+    expect(updateMessages).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("Updated the visible project profile and reran feasibility, then ranking.");
+    expect(document.querySelector(".message-changes summary")?.textContent).toMatch(/accepted changes/i);
+    expect(screen.getByTestId("map-results")).toBeTruthy();
+
+    await send("explain this");
+    const explanation = latest("/api/project/converse").output.assistantMessage as string;
+    const wordCount = explanation.trim().split(/\s+/).length;
+    expect(wordCount).toBeGreaterThanOrEqual(50);
+    expect(wordCount).toBeLessThanOrEqual(90);
+    expect(explanation).not.toMatch(/scoring version|normalization version|data release|release ID|EPSG|grid_carbon_intensity|fiber_coverage_pct|water_stress_current|\d+\.\d+ points|eGRID|Census ACS|FCC/);
+    expect(explanation).not.toContain("Infrastructure & Land");
+    expect(explanation).not.toContain("Community Readiness");
+
+    const projectBeforeThanks = structuredClone(latest("/api/project/converse").output.project);
+    const searchCountBeforeThanks = calls.filter((call) => call.pathname === "/api/locations/search").length;
+    await send("thanks");
+    const thanks = latest("/api/project/converse").output;
+    expect(thanks.assistantMessage).toBe("You're welcome.");
+    expect(thanks.project).toEqual(projectBeforeThanks);
+    expect(thanks.search).toBeUndefined();
+    expect(thanks.project_record).toBeUndefined();
+    expect(calls.filter((call) => call.pathname === "/api/locations/search")).toHaveLength(searchCountBeforeThanks);
+    expect(screen.getByTestId("map-results")).toBeTruthy();
+
+    const conversationCount = calls.filter((call) => call.pathname === "/api/project/converse").length;
+    const searchCount = calls.filter((call) => call.pathname === "/api/locations/search").length;
+    const beforeAmbiguous = structuredClone(latest("/api/project/converse").output.project);
+    await send("jan 26 is");
+    const ambiguous = latest("/api/project/converse").output;
+    expect(ambiguous.assistantMessage).toContain("Could you clarify?");
+    expect(ambiguous.assistantMessage).not.toContain("conflicting instructions");
+    expect(ambiguous.project).toEqual(beforeAmbiguous);
+    expect(ambiguous.search).toBeUndefined();
+    expect(ambiguous.project_record).toBeUndefined();
+    expect(calls.filter((call) => call.pathname === "/api/project/converse")).toHaveLength(conversationCount + 1);
+    expect(calls.filter((call) => call.pathname === "/api/locations/search")).toHaveLength(searchCount);
+    expect(ambiguous.assistantMessage).not.toContain("Evaluated the current project with the deterministic engine.");
+  });
   it("transitions a complete country-free intake into the real map and shortlist", async () => {
     render(<Home />); await send("I need a 500 MW AI training campus by 2030 with strong clean energy and low water risk.");
     const response = latest("/api/project/converse").output;
